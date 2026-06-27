@@ -1,0 +1,61 @@
+name: Pinterest Portfolio Sync
+
+on:
+  # Run every 6 hours
+  schedule:
+    - cron: "0 */6 * * *"
+
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to commit + push
+
+jobs:
+  sync:
+    name: Sync Pinterest Board
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python ─────────────────────────────────────────────────────
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ── 3. Install dependencies ───────────────────────────────────────────────
+      # sync.py uses only stdlib (urllib, json, re, hashlib, os, datetime)
+      # so no pip install is needed. Add packages below if you extend the script.
+      # - name: Install packages
+      #   run: pip install requests
+
+      # ── 4. Run sync script ────────────────────────────────────────────────────
+      - name: Run sync.py
+        env:
+          PINTEREST_API_TOKEN: ${{ secrets.PINTEREST_API_TOKEN }}
+          PINTEREST_USERNAME:  ${{ secrets.PINTEREST_USERNAME }}
+          PINTEREST_BOARD:     ${{ secrets.PINTEREST_BOARD }}
+        run: python scripts/sync.py
+
+      # ── 5. Commit and push if anything changed ────────────────────────────────
+      - name: Commit changes
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage everything that was touched by the script
+          git add images/ works.json
+
+          # Only commit when there is actually something new
+          if git diff --cached --quiet; then
+            echo "Nothing changed — skipping commit."
+          else
+            TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
+            git commit -m "chore: sync Pinterest board [${TIMESTAMP}]"
+            git push
+            echo "Changes pushed to repository."
+          fi
