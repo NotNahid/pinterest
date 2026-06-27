@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pinterest Portfolio</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #111;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    header h1 { font-size: 1.75rem; font-weight: 700; }
+    header p  { margin-top: 0.4rem; color: #666; font-size: 0.9rem; }
+
+    /* ── Gallery grid ─────────────────────────────────────────── */
+    #gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.25rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      transition: transform .15s ease, box-shadow .15s ease;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 4px 14px rgba(0,0,0,.12);
+    }
+
+    .card img {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      display: block;
+      background: #e8e8e8;
+    }
+
+    .card-body {
+      padding: 0.65rem 0.75rem 0.75rem;
+    }
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      line-height: 1.3;
+      /* Clamp to 2 lines */
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .card-date {
+      margin-top: 0.3rem;
+      font-size: 0.75rem;
+      color: #888;
+    }
+    .card-tags {
+      margin-top: 0.4rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+    .tag {
+      font-size: 0.7rem;
+      background: #f0f0f0;
+      color: #555;
+      border-radius: 4px;
+      padding: 0.15rem 0.4rem;
+    }
+
+    /* ── States ───────────────────────────────────────────────── */
+    #status {
+      text-align: center;
+      padding: 3rem 0;
+      color: #888;
+      font-size: 0.95rem;
+    }
+    #status.error { color: #c0392b; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Pinterest Portfolio</h1>
+  <p id="count">Loading…</p>
+</header>
+
+<div id="status">Fetching gallery…</div>
+<div id="gallery" hidden></div>
+
+<script>
+  (function () {
+    const gallery  = document.getElementById("gallery");
+    const status   = document.getElementById("status");
+    const countEl  = document.getElementById("count");
+
+    /**
+     * Escape text to avoid XSS when setting innerHTML.
+     * (titles/tags come from external data so always escape.)
+     */
+    function esc(str) {
+      const d = document.createElement("div");
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function buildCard(item) {
+      const card = document.createElement("a");
+      card.className  = "card";
+      card.href       = item.pin_url || "#";
+      card.target     = "_blank";
+      card.rel        = "noopener noreferrer";
+      card.setAttribute("aria-label", item.title || "Pinterest pin");
+
+      const imgSrc = item.filename
+        ? `images/${esc(item.filename)}`
+        : "";
+
+      const tagsHtml = (item.tags || [])
+        .slice(0, 4)          // cap at 4 tags
+        .map(t => `<span class="tag">#${esc(t)}</span>`)
+        .join("");
+
+      card.innerHTML = `
+        <img
+          src="${imgSrc}"
+          alt="${esc(item.title || "Pin")}"
+          loading="lazy"
+          onerror="this.style.background='#ddd'"
+        />
+        <div class="card-body">
+          <div class="card-title">${esc(item.title || "Untitled")}</div>
+          ${item.date ? `<div class="card-date">${esc(item.date)}</div>` : ""}
+          ${tagsHtml   ? `<div class="card-tags">${tagsHtml}</div>` : ""}
+        </div>
+      `;
+      return card;
+    }
+
+    fetch("works.json?_=" + Date.now())          // bust cache
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (works) {
+        status.hidden = true;
+
+        if (!works.length) {
+          status.textContent = "No pins synced yet. Run the GitHub Action to populate the gallery.";
+          status.hidden = false;
+          countEl.textContent = "0 pins";
+          return;
+        }
+
+        countEl.textContent = works.length + " pin" + (works.length !== 1 ? "s" : "");
+
+        works.forEach(function (item) {
+          gallery.appendChild(buildCard(item));
+        });
+
+        gallery.hidden = false;
+      })
+      .catch(function (err) {
+        status.className = "error";
+        status.textContent = "Could not load works.json — " + err.message;
+        status.hidden = false;
+        countEl.textContent = "";
+        console.error(err);
+      });
+  })();
+</script>
+
+</body>
+</html>
